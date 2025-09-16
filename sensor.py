@@ -94,19 +94,15 @@ def find_next_tides(tide_points: list, now: datetime) -> tuple:
     # Sort by datetime to ensure proper order
     tide_points.sort(key=lambda x: x["datetime"])
     
-    next_high = None
-    next_low = None
-    
     _LOGGER.debug("Looking for tides after: %s", now)
     _LOGGER.debug("First few tide points: %s", tide_points[:5])
+    
+    # Find all peaks and troughs in chronological order
+    tide_events = []
     
     # Use a wider window for peak/trough detection
     for i in range(2, len(tide_points) - 2):
         curr_point = tide_points[i]
-        
-        # Skip if this point is in the past
-        if curr_point["datetime"] <= now:
-            continue
         
         # Get surrounding points for better peak detection
         prev2 = tide_points[i - 2]
@@ -128,17 +124,31 @@ def find_next_tides(tide_points: list, now: datetime) -> tuple:
                     curr_height < next1["height"] and 
                     curr_height < next2["height"])
         
-        if is_peak and next_high is None:
-            next_high = curr_point
+        if is_peak:
+            tide_events.append({"type": "high", "datetime": curr_point["datetime"], "height": curr_height})
             _LOGGER.debug("Found high tide: %s at height %s", curr_point["datetime"], curr_height)
             
-        if is_trough and next_low is None:
-            next_low = curr_point
+        if is_trough:
+            tide_events.append({"type": "low", "datetime": curr_point["datetime"], "height": curr_height})
             _LOGGER.debug("Found low tide: %s at height %s", curr_point["datetime"], curr_height)
+    
+    # Sort tide events by datetime
+    tide_events.sort(key=lambda x: x["datetime"])
+    
+    # Find next high and low tides after current time
+    next_high = None
+    next_low = None
+    
+    for event in tide_events:
+        if event["datetime"] > now:
+            if event["type"] == "high" and next_high is None:
+                next_high = {"datetime": event["datetime"], "height": event["height"]}
+            elif event["type"] == "low" and next_low is None:
+                next_low = {"datetime": event["datetime"], "height": event["height"]}
             
-        # Stop if we found both
-        if next_high and next_low:
-            break
+            # Stop once we have both next high and low
+            if next_high and next_low:
+                break
     
     _LOGGER.debug("Final result - next_high: %s, next_low: %s", next_high, next_low)
     return next_high, next_low

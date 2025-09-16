@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1] - 2025-01-16
+
+### Fixed
+- Fixed next_high/next_low tide timing sequence to respect chronological order
+- Resolved issue where next_high showed ~24h and next_low showed current time
+- Improved tide detection to properly follow 6-hour tide cycle timing
+
 ## [1.1.0] - 2025-09-16
 
 ### Added
