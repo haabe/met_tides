@@ -1,7 +1,7 @@
 {
 	"domain": "met_tides",
 	"name": "MET Tides",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"documentation": "https://api.met.no/weatherapi/tidalwater/1.1/documentation",
 	"requirements": [],
 	"codeowners": ["@haabe"],

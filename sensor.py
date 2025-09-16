@@ -112,16 +112,16 @@ def find_next_tides(tide_points: list, now: datetime) -> tuple:
         
         curr_height = curr_point["height"]
         
-        # Check for high tide (peak) - current point higher than surrounding points
-        is_peak = (curr_height > prev2["height"] and 
-                  curr_height > prev1["height"] and 
-                  curr_height > next1["height"] and 
+        # Check for high tide (peak) - more flexible detection
+        is_peak = (curr_height >= prev1["height"] and 
+                  curr_height >= next1["height"] and 
+                  curr_height > prev2["height"] and 
                   curr_height > next2["height"])
         
-        # Check for low tide (trough) - current point lower than surrounding points  
-        is_trough = (curr_height < prev2["height"] and 
-                    curr_height < prev1["height"] and 
-                    curr_height < next1["height"] and 
+        # Check for low tide (trough) - more flexible detection
+        is_trough = (curr_height <= prev1["height"] and 
+                    curr_height <= next1["height"] and 
+                    curr_height < prev2["height"] and 
                     curr_height < next2["height"])
         
         if is_peak:
@@ -135,20 +135,23 @@ def find_next_tides(tide_points: list, now: datetime) -> tuple:
     # Sort tide events by datetime
     tide_events.sort(key=lambda x: x["datetime"])
     
-    # Find next high and low tides after current time
+    # Find the immediate next high and low tides after current time
+    future_events = [e for e in tide_events if e["datetime"] > now]
+    
     next_high = None
     next_low = None
     
-    for event in tide_events:
-        if event["datetime"] > now:
-            if event["type"] == "high" and next_high is None:
-                next_high = {"datetime": event["datetime"], "height": event["height"]}
-            elif event["type"] == "low" and next_low is None:
-                next_low = {"datetime": event["datetime"], "height": event["height"]}
-            
-            # Stop once we have both next high and low
-            if next_high and next_low:
-                break
+    # Find the very next high tide
+    for event in future_events:
+        if event["type"] == "high":
+            next_high = {"datetime": event["datetime"], "height": event["height"]}
+            break
+    
+    # Find the very next low tide
+    for event in future_events:
+        if event["type"] == "low":
+            next_low = {"datetime": event["datetime"], "height": event["height"]}
+            break
     
     _LOGGER.debug("Final result - next_high: %s, next_low: %s", next_high, next_low)
     return next_high, next_low

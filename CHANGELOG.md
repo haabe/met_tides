@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.2] - 2025-01-16
+
+### Fixed
+- Fixed next tide detection to find immediate next high/low tides instead of any future ones
+- Ensures proper tide timing when multiple tides exist before the previously detected ones
+
 ## [1.1.1] - 2025-01-16
 
 ### Fixed
