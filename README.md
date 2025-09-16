@@ -47,12 +47,12 @@ The integration creates three sensors for each configured harbor:
 ## Supported Harbors
 
 Any harbor supported by the MET Norway TidalWater API. Common examples:
-- trondheim
-- bergen
-- oslo
-- stavanger
-- kristiansand
-- tromsø
+- Trondheim
+- Bergen
+- Oslo
+- Stavanger
+- Kristiansand
+- Tromsø
 
 ## Data Source
 
