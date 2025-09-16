@@ -1,0 +1,189 @@
+import logging
+import aiohttp
+from datetime import datetime, timezone, timedelta
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, CoordinatorEntity
+from .const import DOMAIN, USER_AGENT
+
+_LOGGER = logging.getLogger(__name__)
+
+async def async_setup_entry(hass, entry, async_add_entities):
+    """Set up MET Tides sensors via config entry."""
+    harbor = entry.data["harbor"].capitalize()
+
+    # Prefer options over initial data
+    sensors = entry.options.get("sensors") or entry.data.get("sensors", ["next_high", "next_low", "current_height"])
+
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        name=f"met_tides_{harbor}",
+        update_method=lambda: fetch_tides(harbor),
+        update_interval=timedelta(hours=1),
+    )
+
+    await coordinator.async_refresh()
+
+    entities = [METTideSensor(coordinator, harbor, s) for s in sensors]
+    async_add_entities(entities, True)
+
+
+async def fetch_tides(harbor: str) -> dict:
+    url = f"https://api.met.no/weatherapi/tidalwater/1.1/forecast?harbor={harbor.lower()}"
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=10) as resp:
+                text = await resp.text()
+                _LOGGER.debug("Raw tide data: %s", text[:1000])  # log first 1000 chars
+                _LOGGER.debug("Full raw tide data: %s", text)  # log full response
+                return parse_tides(text)
+    except Exception as e:
+        _LOGGER.error("Error fetching tides: %s", e)
+        return {"next_high": "unavailable", "next_low": "unavailable", "current_height": "unavailable"}
+
+
+def parse_tides(data: str) -> dict:
+    """Parse MET tidal data and return next high/low tides and current height."""
+    lines = data.splitlines()
+    tide_points = []
+
+    now = datetime.utcnow()
+    _LOGGER.debug("Parsing tides, current time: %s", now)
+    
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 8:
+            continue
+
+        try:
+            year = int(parts[0])
+            month = int(parts[1])
+            day = int(parts[2])
+            hour = int(parts[3])
+            minute = int(parts[4])
+            # Use TOTAL column (index 7) for tide height
+            height = float(parts[7])
+        except (ValueError, IndexError) as e:
+            _LOGGER.debug("Skipping line due to parse error: %s | %s", line, e)
+            continue
+
+        tide_dt = datetime(year, month, day, hour, minute)
+        tide_points.append({"datetime": tide_dt, "height": height})
+
+    # Find high/low tides from the data points
+    next_high, next_low = find_next_tides(tide_points, now)
+    
+    # Calculate current height by interpolation
+    current_height = interpolate_current_height(tide_points, now)
+
+    return {
+        "next_high": next_high or {"datetime": None, "height": None},
+        "next_low": next_low or {"datetime": None, "height": None},
+        "current_height": current_height,
+    }
+
+def find_next_tides(tide_points: list, now: datetime) -> tuple:
+    """Find next high and low tides from tide data points."""
+    if len(tide_points) < 3:
+        return None, None
+    
+    next_high = None
+    next_low = None
+    
+    for i in range(1, len(tide_points) - 1):
+        prev_point = tide_points[i - 1]
+        curr_point = tide_points[i]
+        next_point = tide_points[i + 1]
+        
+        # Skip if this point is in the past
+        if curr_point["datetime"] <= now:
+            continue
+            
+        # Check for high tide (peak)
+        if (curr_point["height"] > prev_point["height"] and 
+            curr_point["height"] > next_point["height"] and 
+            next_high is None):
+            next_high = curr_point
+            
+        # Check for low tide (trough)
+        if (curr_point["height"] < prev_point["height"] and 
+            curr_point["height"] < next_point["height"] and 
+            next_low is None):
+            next_low = curr_point
+            
+        # Stop if we found both
+        if next_high and next_low:
+            break
+    
+    _LOGGER.debug("Found next_high: %s, next_low: %s", next_high, next_low)
+    return next_high, next_low
+
+
+def interpolate_current_height(tide_points: list, now: datetime) -> float:
+    """Interpolate current water height from tide data points."""
+    if not tide_points:
+        return None
+    
+    # Sort by datetime
+    tide_points.sort(key=lambda x: x["datetime"])
+    
+    # Find surrounding points
+    before_point = None
+    after_point = None
+    
+    for point in tide_points:
+        if point["datetime"] <= now:
+            before_point = point
+        elif point["datetime"] > now and after_point is None:
+            after_point = point
+            break
+    
+    if not before_point or not after_point:
+        # Use closest available point
+        closest = min(tide_points, key=lambda x: abs((x["datetime"] - now).total_seconds()))
+        return closest["height"]
+    
+    # Linear interpolation
+    time_diff = (after_point["datetime"] - before_point["datetime"]).total_seconds()
+    time_offset = (now - before_point["datetime"]).total_seconds()
+    height_diff = after_point["height"] - before_point["height"]
+    
+    return before_point["height"] + (height_diff * time_offset / time_diff)
+
+
+class METTideSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator, harbor, sensor_type):
+        super().__init__(coordinator)
+        self._harbor = harbor
+        self._sensor_type = sensor_type
+
+    @property
+    def name(self):
+        return f"Tides {self._harbor.title()} {self._sensor_type.replace('_', ' ').title()}"
+
+    @property
+    def unique_id(self):
+        return f"met_tides_{self._harbor.lower()}_{self._sensor_type}"
+
+    @property
+    def state(self):
+        if self._sensor_type == "current_height":
+            height = self.coordinator.data.get("current_height")
+            return round(height, 2) if height is not None else None
+        
+        tide = self.coordinator.data.get(self._sensor_type)
+        return tide["datetime"].isoformat() if tide and tide["datetime"] else None
+
+    @property
+    def extra_state_attributes(self):
+        if self._sensor_type == "current_height":
+            return {"harbor": self._harbor.title(), "unit_of_measurement": "m"}
+        
+        tide = self.coordinator.data.get(self._sensor_type)
+        if not tide or not tide["datetime"]:
+            return {}
+        return {
+            "harbor": self._harbor.title(),
+            "height_m": tide["height"]
+        }

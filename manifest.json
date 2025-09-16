@@ -1,0 +1,11 @@
+{
+	"domain": "met_tides",
+	"name": "MET Tides",
+	"version": "0.1.0",
+	"documentation": "https://api.met.no/weatherapi/tidalwater/1.1/documentation",
+	"requirements": [],
+	"codeowners": ["@haabe"],
+	"iot_class": "cloud_polling",
+	"integration_type": "service",
+	"config_flow": true
+}
