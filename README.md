@@ -32,7 +32,7 @@ A Home Assistant custom component that provides tidal information for Norwegian 
 
 1. Go to Settings → Devices & Services
 2. Click "Add Integration" and search for "MET Tides"
-3. Enter a Norwegian harbor name (e.g., "trondheim", "bergen", "oslo")
+3. Enter a Norwegian harbor name (e.g., "Trondheim", "Bergen", "Oslo")
 4. Select which sensors you want to create
 5. Click "Submit"
 
