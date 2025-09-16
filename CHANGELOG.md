@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0] - 2025-09-16
+
+### Added
+- Real-time current height updates based on current time
+- Dynamic interpolation for current_height sensor between data fetches
+- INFO level logging when fetching new tide data
+
+### Changed
+- Current height now updates continuously instead of only when data is fetched
+- Improved timezone handling with proper UTC support
+- Enhanced tide detection algorithm with wider peak/trough detection window
+
 ## [1.0.1] - 2025-09-16
 
 ### Fixed

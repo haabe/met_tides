@@ -32,6 +32,7 @@ async def fetch_tides(harbor: str) -> dict:
     url = f"https://api.met.no/weatherapi/tidalwater/1.1/forecast?harbor={harbor.lower()}"
     headers = {"User-Agent": USER_AGENT}
     try:
+        _LOGGER.info("Fetching tide data for %s", harbor)
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers, timeout=10) as resp:
                 text = await resp.text()
@@ -48,7 +49,7 @@ def parse_tides(data: str) -> dict:
     lines = data.splitlines()
     tide_points = []
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     _LOGGER.debug("Parsing tides, current time: %s", now)
     
     for line in lines:
@@ -68,7 +69,8 @@ def parse_tides(data: str) -> dict:
             _LOGGER.debug("Skipping line due to parse error: %s | %s", line, e)
             continue
 
-        tide_dt = datetime(year, month, day, hour, minute)
+        # Create datetime in UTC (MET data is in UTC)
+        tide_dt = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
         tide_points.append({"datetime": tide_dt, "height": height})
 
     # Find high/low tides from the data points
@@ -81,42 +83,64 @@ def parse_tides(data: str) -> dict:
         "next_high": next_high or {"datetime": None, "height": None},
         "next_low": next_low or {"datetime": None, "height": None},
         "current_height": current_height,
+        "tide_points": tide_points,  # Store for dynamic current_height calculation
     }
 
 def find_next_tides(tide_points: list, now: datetime) -> tuple:
     """Find next high and low tides from tide data points."""
-    if len(tide_points) < 3:
+    if len(tide_points) < 5:
         return None, None
+    
+    # Sort by datetime to ensure proper order
+    tide_points.sort(key=lambda x: x["datetime"])
     
     next_high = None
     next_low = None
     
-    for i in range(1, len(tide_points) - 1):
-        prev_point = tide_points[i - 1]
+    _LOGGER.debug("Looking for tides after: %s", now)
+    _LOGGER.debug("First few tide points: %s", tide_points[:5])
+    
+    # Use a wider window for peak/trough detection
+    for i in range(2, len(tide_points) - 2):
         curr_point = tide_points[i]
-        next_point = tide_points[i + 1]
         
         # Skip if this point is in the past
         if curr_point["datetime"] <= now:
             continue
-            
-        # Check for high tide (peak)
-        if (curr_point["height"] > prev_point["height"] and 
-            curr_point["height"] > next_point["height"] and 
-            next_high is None):
+        
+        # Get surrounding points for better peak detection
+        prev2 = tide_points[i - 2]
+        prev1 = tide_points[i - 1]
+        next1 = tide_points[i + 1]
+        next2 = tide_points[i + 2]
+        
+        curr_height = curr_point["height"]
+        
+        # Check for high tide (peak) - current point higher than surrounding points
+        is_peak = (curr_height > prev2["height"] and 
+                  curr_height > prev1["height"] and 
+                  curr_height > next1["height"] and 
+                  curr_height > next2["height"])
+        
+        # Check for low tide (trough) - current point lower than surrounding points  
+        is_trough = (curr_height < prev2["height"] and 
+                    curr_height < prev1["height"] and 
+                    curr_height < next1["height"] and 
+                    curr_height < next2["height"])
+        
+        if is_peak and next_high is None:
             next_high = curr_point
+            _LOGGER.debug("Found high tide: %s at height %s", curr_point["datetime"], curr_height)
             
-        # Check for low tide (trough)
-        if (curr_point["height"] < prev_point["height"] and 
-            curr_point["height"] < next_point["height"] and 
-            next_low is None):
+        if is_trough and next_low is None:
             next_low = curr_point
+            _LOGGER.debug("Found low tide: %s at height %s", curr_point["datetime"], curr_height)
             
         # Stop if we found both
         if next_high and next_low:
             break
     
-    _LOGGER.debug("Found next_high: %s, next_low: %s", next_high, next_low)
+    _LOGGER.debug("Final result - next_high: %s, next_low: %s", next_high, next_low)
     return next_high, next_low
 
 
@@ -169,8 +193,13 @@ class METTideSensor(CoordinatorEntity, SensorEntity):
     @property
     def state(self):
         if self._sensor_type == "current_height":
-            height = self.coordinator.data.get("current_height")
-            return round(height, 2) if height is not None else None
+            # Recalculate current height based on current time
+            tide_points = self.coordinator.data.get("tide_points")
+            if tide_points:
+                now = datetime.now(timezone.utc)
+                height = interpolate_current_height(tide_points, now)
+                return round(height, 2) if height is not None else None
+            return None
         
         tide = self.coordinator.data.get(self._sensor_type)
         return tide["datetime"].isoformat() if tide and tide["datetime"] else None
