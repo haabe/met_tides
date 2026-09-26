@@ -13,7 +13,6 @@ from .const import (
     CONF_HARBOR,
     CONF_SENSORS,
     DEFAULT_NAME,
-    DOCUMENTED_HARBORS,
     DOMAIN,
     REQUEST_TIMEOUT,
     SENSOR_TYPES,
@@ -68,8 +67,9 @@ class METTidesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         harbors = await fetch_harbors(self.hass)
         if not harbors:
-            _LOGGER.warning("Harbor list unavailable, falling back to documented harbors")
-            harbors = {h: h.capitalize() for h in DOCUMENTED_HARBORS}
+            # MET's harbor list is dynamic (API changelog 2026-09-11), so there
+            # is no safe static fallback
+            return self.async_abort(reason="cannot_connect")
 
         schema = vol.Schema(
             {

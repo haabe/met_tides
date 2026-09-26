@@ -10,16 +10,6 @@ API_BASE = "https://api.met.no/weatherapi/tidalwater/1.1"
 FORECAST_URL = f"{API_BASE}/"
 AVAILABLE_URL = f"{API_BASE}/available"
 
-# Harbors listed in the API documentation; offered when the available
-# endpoint can't be reached so setup isn't blocked by a transient outage.
-DOCUMENTED_HARBORS = [
-    "andenes", "bergen", "bodø", "bruravik", "bøfjorden", "ekofisk", "eydehavn",
-    "hammerfest", "harstad", "heidrun", "heimsjø", "helgeroa", "honningsvåg",
-    "kabelvåg", "kaupanger", "kristiansund", "leirvik", "mausund", "måløy",
-    "narvik", "ny-ålesund", "oscarsborg", "oslo", "rørvik", "sandnes", "sirevåg",
-    "solumstrand", "stavanger", "tregde", "tromsø", "trondheim", "træna",
-    "vardø", "viker", "ålesund",
-]  # fmt: skip
 REQUEST_TIMEOUT = 10
 
 SENSOR_TYPES = {

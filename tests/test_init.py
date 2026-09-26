@@ -189,3 +189,12 @@ async def test_non_ascii_harbor(hass, aioclient_mock, forecast_text, freezer, fo
     state = hass.states.get(entity_id)
     assert state.attributes["harbor"] == "Ålesund"
     assert state.attributes["friendly_name"] == "Tides Ålesund Next High"
+
+
+@pytest.mark.parametrize("status", [400, 404, 422])
+async def test_withdrawn_harbor_gives_actionable_error(hass, entry, aioclient_mock, caplog, status):
+    """MET can drop harbors without notice; the log should say what to do."""
+    aioclient_mock.get(FORECAST_URL, params={"harbor": "oslo"}, status=status)
+    assert not await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert "may have been withdrawn" in caplog.text

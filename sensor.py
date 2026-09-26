@@ -43,6 +43,12 @@ async def fetch_tides(session: aiohttp.ClientSession, harbor: str) -> dict:
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
         ) as resp:
+            if resp.status in (400, 404, 422):
+                # MET may withdraw harbors without notice (API changelog 2026-09-11)
+                raise UpdateFailed(
+                    f"MET rejected harbor '{harbor}' (HTTP {resp.status}); it may have been "
+                    "withdrawn. Check the available harbors and re-add the integration."
+                )
             resp.raise_for_status()
             text = await resp.text()
     except (TimeoutError, aiohttp.ClientError) as err:

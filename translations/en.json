@@ -12,7 +12,8 @@
       }
     },
     "abort": {
-      "already_configured": "This harbor is already configured."
+      "already_configured": "This harbor is already configured.",
+      "cannot_connect": "Could not fetch the harbor list from MET Norway. Try again later."
     }
   }
 }
