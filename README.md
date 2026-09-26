@@ -57,3 +57,14 @@ Any harbor supported by the MET Norway TidalWater API. Common examples:
 ## Data Source
 
 This integration uses the [MET Norway TidalWater API](https://api.met.no/weatherapi/tidalwater/1.1/documentation) which provides tidal forecasts for Norwegian coastal locations.
+
+## Development
+
+```bash
+uv venv -p 3.14 && source .venv/bin/activate
+uv pip install -r requirements_test.txt -r requirements_lint.txt
+ruff check . && ruff format --check .
+pytest --cov
+```
+
+Releases: bump the version in `manifest.json`, `VERSION`, `const.py` (User-Agent) and `CHANGELOG.md` (a test enforces they agree), then push a `vX.Y.Z` tag. The release workflow runs CI and publishes a GitHub release.

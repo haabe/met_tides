@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Failed API requests no longer crash the sensors (`'str' object is not subscriptable`); entities now go unavailable and recover on the next successful fetch
+- HTTP error responses are no longer parsed as tide data
+- `current_height` now actually updates every 5 minutes between hourly fetches
+- Setup is retried by Home Assistant when MET is unreachable at startup
+- The same harbor can no longer be added twice
+- The config flow aborts with a clear message when the harbor list can't be fetched, instead of offering an empty harbor
+
+### Changed
+- Identify with a proper User-Agent, as required by MET Norway's terms of service
+- Use Home Assistant's shared HTTP session
+- Timestamp sensors use the `timestamp` device class; `current_height` has a proper `m` unit and state class for long-term statistics
+
+### Added
+- Test suite (pytest + pytest-homeassistant-custom-component), CI (lint, tests, hassfest, HACS validation), release workflow and Dependabot
+
 ## [1.1.2] - 2025-01-16
 
 ### Fixed
