@@ -1,0 +1,2 @@
+# Pins Home Assistant too; bump via Dependabot to test against new HA releases
+pytest-homeassistant-custom-component==0.13.366

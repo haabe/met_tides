@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<available>
+  <query>
+    <parameter><name>harbor</name><value>oslo</value></parameter>
+  </query>
+  <query>
+    <parameter><name>harbor</name><value>bergen</value></parameter>
+  </query>
+  <query>
+    <parameter><name>harbor</name><value>trondheim</value></parameter>
+    <parameter><name>content_type</name><value>text/plain</value></parameter>
+  </query>
+  <query>
+    <parameter><name>harbor</name><value></value></parameter>
+  </query>
+</available>

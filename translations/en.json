@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MET Tides",
+        "description": "Choose a Norwegian harbor to track tides for.",
+        "data": {
+          "name": "Name",
+          "harbor": "Harbor",
+          "sensors": "Sensors"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This harbor is already configured.",
+      "cannot_connect": "Could not fetch the harbor list from MET Norway. Try again later."
+    }
+  }
+}

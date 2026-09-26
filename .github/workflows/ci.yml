@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          activate-environment: true
+          enable-cache: true
+          cache-dependency-glob: requirements_lint.txt
+      - run: uv pip install -r requirements_lint.txt
+      - run: ruff check --output-format=github .
+      - run: ruff format --check --diff .
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          activate-environment: true
+          enable-cache: true
+          cache-dependency-glob: requirements_test.txt
+      - run: uv pip install -r requirements_test.txt
+      - name: Run tests
+        run: pytest --cov --cov-report=term-missing --cov-report=xml --junitxml=junit.xml
+      - name: Coverage summary
+        if: always() && hashFiles('coverage.xml') != ''
+        run: |
+          {
+            echo '## Coverage'
+            echo '```'
+            coverage report
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  validate:
+    name: Validate (hassfest + HACS)
+    uses: ./.github/workflows/validate.yml

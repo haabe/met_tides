@@ -1,0 +1,38 @@
+name: Validate
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    # Weekly, to catch new hassfest/HACS rules before users hit them
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The integration lives at the repo root (HACS content_in_root), but
+      # hassfest expects custom_components/<domain>/ and also scans the root,
+      # so move the files rather than copy them.
+      - name: Stage integration under custom_components/
+        run: |
+          mkdir -p custom_components/met_tides
+          mv *.py manifest.json translations custom_components/met_tides/
+      - uses: home-assistant/actions/hassfest@58bff37c8947f690ace498be413a9b78d6f30f93 # master
+
+  hacs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: hacs/action@d556e736723344f83838d08488c983a15381059a # 22.5.0
+        with:
+          category: integration
+          # Not submitted to home-assistant/brands yet
+          ignore: brands
