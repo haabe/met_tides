@@ -19,6 +19,9 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_SENSORS = ["next_high", "next_low", "current_height"]
 # How often current_height is re-interpolated between hourly API fetches
 CURRENT_HEIGHT_REFRESH = timedelta(minutes=5)
+# Half-width of the window a high/low must dominate. Norwegian tides are
+# semidiurnal (~6h12m between high and low), so 90 min is well inside that.
+TURNING_POINT_WINDOW = timedelta(minutes=90)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -106,30 +109,43 @@ def parse_tides(data: str, now: datetime | None = None) -> dict:
 
 
 def find_next_tides(tide_points: list, now: datetime) -> tuple:
-    """Find next high and low tides from tide data points (sorted by datetime)."""
-    if len(tide_points) < 5:
+    """Find next high and low tides from tide data points (sorted by datetime).
+
+    A point is a high (low) tide if it is the maximum (minimum) of all points
+    within +/-TURNING_POINT_WINDOW. Using a time window rather than adjacent
+    samples keeps the few-cm surge jitter in 10-minute data from producing
+    false turning points on the rising or falling limb.
+    """
+    if len(tide_points) < 3:
         return None, None
 
+    first_dt = tide_points[0]["datetime"]
+    last_dt = tide_points[-1]["datetime"]
     tide_events = []
+    lo = hi = 0  # indices bounding the window [lo, hi)
 
-    # Use a +/-2 sample window for peak/trough detection
-    for i in range(2, len(tide_points) - 2):
-        curr_point = tide_points[i]
-        prev2 = tide_points[i - 2]["height"]
-        prev1 = tide_points[i - 1]["height"]
-        next1 = tide_points[i + 1]["height"]
-        next2 = tide_points[i + 2]["height"]
-        curr_height = curr_point["height"]
+    for point in tide_points:
+        dt = point["datetime"]
+        # Only judge points whose full window lies inside the data
+        if dt - TURNING_POINT_WINDOW < first_dt or dt + TURNING_POINT_WINDOW > last_dt:
+            continue
+        while tide_points[lo]["datetime"] < dt - TURNING_POINT_WINDOW:
+            lo += 1
+        while hi < len(tide_points) and tide_points[hi]["datetime"] <= dt + TURNING_POINT_WINDOW:
+            hi += 1
+        heights = [p["height"] for p in tide_points[lo:hi]]
+        if max(heights) == min(heights):
+            continue  # flat water, no turning point
 
-        is_peak = curr_height >= prev1 and curr_height >= next1 and curr_height > prev2 and curr_height > next2
-        is_trough = curr_height <= prev1 and curr_height <= next1 and curr_height < prev2 and curr_height < next2
-
-        # A two-sample plateau matches twice; harmless since only the first
-        # future event of each type is used.
-        if is_peak:
-            tide_events.append({"type": "high", "datetime": curr_point["datetime"], "height": curr_height})
-        if is_trough:
-            tide_events.append({"type": "low", "datetime": curr_point["datetime"], "height": curr_height})
+        for tide_type, extreme in (("high", max(heights)), ("low", min(heights))):
+            if point["height"] != extreme:
+                continue
+            # Equal samples at a flat top/bottom all qualify; keep the first.
+            # Real highs (lows) are ~12h apart, so anything this close is the same tide.
+            prev = next((e for e in reversed(tide_events) if e["type"] == tide_type), None)
+            if prev and dt - prev["datetime"] <= 2 * TURNING_POINT_WINDOW:
+                continue
+            tide_events.append({"type": tide_type, "datetime": dt, "height": point["height"]})
 
     future_events = [e for e in tide_events if e["datetime"] > now]
     next_high = next(
