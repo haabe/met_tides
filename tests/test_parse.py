@@ -1,6 +1,7 @@
 """Unit tests for the pure parsing / tide detection helpers."""
 
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 
 import pytest
 from conftest import FIXTURES
@@ -106,6 +107,32 @@ class TestParseTides:
                 continue
             assert now < event <= now + M2_PERIOD + timedelta(minutes=10)
 
+    @pytest.mark.parametrize("noise", [0.03, 0.1])
+    @pytest.mark.parametrize("seed", range(20))
+    def test_surge_noise_does_not_create_false_tides(self, forecast_start, noise, seed):
+        """10-minute data with surge jitter must not yield extra turning points.
+
+        The old +/-2-sample detector reported a false high/low in ~15% of cases
+        at +/-3 cm; a false event shows up here as a ~6h or ~12h error.
+        """
+        text = make_forecast(forecast_start, noise=noise, seed=seed)
+        # Well after the true low at 3T/4: next is the high at 5T/4, then low at 7T/4
+        now = forecast_start + 3 * M2_PERIOD / 4 + timedelta(minutes=90)
+        result = parse_tides(text, now=now)
+        _assert_near(result["next_high"]["datetime"], forecast_start + 5 * M2_PERIOD / 4, timedelta(minutes=60))
+        _assert_near(result["next_low"]["datetime"], forecast_start + 7 * M2_PERIOD / 4, timedelta(minutes=60))
+
+    def test_clean_sinusoid_highs_are_one_period_apart(self, forecast_start, forecast_text):
+        points = parse_tides(forecast_text, now=forecast_start)["tide_points"]
+        highs, now = [], forecast_start
+        while (high := find_next_tides(points, now)[0]) is not None:
+            highs.append(high["datetime"])
+            now = high["datetime"]
+        # Highs at T/4 + k*T: 3.1h, 15.5h, 27.9h, 40.3h fall inside 48h of data
+        assert len(highs) == 4
+        for a, b in pairwise(highs):
+            assert abs((b - a) - M2_PERIOD) <= timedelta(minutes=10)
+
     def test_no_future_events_past_forecast_end(self, forecast_start, forecast_text):
         result = parse_tides(forecast_text, now=forecast_start + timedelta(days=5))
         assert result["next_high"]["datetime"] is None
@@ -121,21 +148,32 @@ class TestFindNextTides:
     def test_monotonic_series_has_no_events(self):
         assert find_next_tides(_points([0, 1, 2, 3, 4, 5, 6]), self.NOW) == (None, None)
 
+    # Hourly samples: the +/-90 min window then spans one neighbour each side
     def test_two_sample_plateau_yields_single_event(self):
-        points = _points([0.0, 0.5, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0])
+        points = _points([0.0, 0.5, 1.0, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0], step=60)
         high, low = find_next_tides(points, self.NOW)
         assert high["datetime"] == points[2]["datetime"]
         assert low["datetime"] == points[7]["datetime"]
 
-    def test_three_sample_plateau_yields_middle(self):
-        points = _points([0.0, 0.5, 1.0, 1.0, 1.0, 0.5, 0.0])
-        high, _ = find_next_tides(points, self.NOW)
-        assert high["datetime"] == points[3]["datetime"]
+    def test_three_sample_plateau_yields_first(self):
+        points = _points([0.0, 0.5, 1.0, 1.0, 1.0, 0.5, 0.0, 0.5, 1.0, 0.5, 0.0], step=60)
+        high, _ = find_next_tides(points, points[1]["datetime"])
+        assert high["datetime"] == points[2]["datetime"]
+        # The rest of the plateau is not reported as further highs
+        high, _ = find_next_tides(points, points[2]["datetime"])
+        assert high["datetime"] == points[8]["datetime"]
 
     def test_event_exactly_at_now_is_not_next(self):
-        points = _points([0.0, 0.5, 1.0, 0.5, 0.0, 0.5, 1.0, 0.5, 0.0])
+        points = _points([0.0, 0.5, 1.0, 0.5, 0.0, 0.5, 1.0, 0.5, 0.0], step=60)
         high, _ = find_next_tides(points, points[2]["datetime"])
         assert high["datetime"] == points[6]["datetime"]
+
+    def test_turning_point_near_data_edge_is_not_reported(self):
+        """A max in the last 90 min may just be a still-rising tide."""
+        points = _points([0.5, 0.0, -1.0, 0.0, 0.5, 1.0], step=60)
+        high, low = find_next_tides(points, self.NOW)
+        assert high is None
+        assert low["datetime"] == points[2]["datetime"]
 
     def test_constant_series_has_no_events(self):
         assert find_next_tides(_points([1.0] * 20), self.NOW) == (None, None)

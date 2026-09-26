@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- High/low tide detection is no longer fooled by small weather-driven wobbles in the 10-minute data: a turning point must be the extreme of a ±90 min window (previously ±2 samples, which gave false tides in ~15% of simulated forecasts with ±3 cm noise)
 - Failed API requests no longer crash the sensors (`'str' object is not subscriptable`); entities now go unavailable and recover on the next successful fetch
 - HTTP error responses are no longer parsed as tide data
 - `current_height` now actually updates every 5 minutes between hourly fetches

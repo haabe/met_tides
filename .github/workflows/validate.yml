@@ -34,5 +34,7 @@ jobs:
       - uses: hacs/action@d556e736723344f83838d08488c983a15381059a # 22.5.0
         with:
           category: integration
-          # Not submitted to home-assistant/brands yet
-          ignore: brands
+          # brands/topics only matter for the HACS default store; installing as a
+          # custom repository works without them. After adding repo topics
+          # (e.g. home-assistant, hacs, integration), drop "topics" from here.
+          ignore: brands topics
