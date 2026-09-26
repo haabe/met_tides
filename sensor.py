@@ -12,7 +12,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
 
-from .const import API_BASE, REQUEST_TIMEOUT, USER_AGENT
+from .const import FORECAST_URL, REQUEST_TIMEOUT, USER_AGENT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,12 +34,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 async def fetch_tides(session: aiohttp.ClientSession, harbor: str) -> dict:
     """Fetch and parse the tide forecast. Raises UpdateFailed on any failure."""
-    url = f"{API_BASE}/forecast"
     headers = {"User-Agent": USER_AGENT}
     _LOGGER.info("Fetching tide data for %s", harbor)
     try:
         async with session.get(
-            url,
+            FORECAST_URL,
             params={"harbor": harbor.lower()},
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),

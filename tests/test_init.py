@@ -14,7 +14,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.met_tides.const import DOMAIN, USER_AGENT
 from tide_helpers import M2_PERIOD
 
-FORECAST_URL = "https://api.met.no/weatherapi/tidalwater/1.1/forecast"
+FORECAST_URL = "https://api.met.no/weatherapi/tidalwater/1.1/"
 
 HIGH = "sensor.tides_oslo_next_high"
 LOW = "sensor.tides_oslo_next_low"
@@ -173,3 +173,19 @@ async def test_error_status_with_parseable_body_is_rejected(hass, entry, aioclie
     aioclient_mock.get(FORECAST_URL, params={"harbor": "oslo"}, status=429, text=forecast_text)
     assert not await _setup(hass, entry)
     assert entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_non_ascii_harbor(hass, aioclient_mock, forecast_text, freezer, forecast_start):
+    """Several documented harbors (tromsø, ålesund, bodø, ...) are non-ASCII."""
+    freezer.move_to(forecast_start)
+    aioclient_mock.get(FORECAST_URL, params={"harbor": "ålesund"}, text=forecast_text)
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="ålesund", data={"name": "x", "harbor": "ålesund"})
+    assert await _setup(hass, entry)
+    assert aioclient_mock.call_count == 1
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, "met_tides_ålesund_next_high")
+    assert entity_id is not None
+    state = hass.states.get(entity_id)
+    assert state.attributes["harbor"] == "Ålesund"
+    assert state.attributes["friendly_name"] == "Tides Ålesund Next High"

@@ -16,9 +16,15 @@ def make_forecast(
 ) -> str:
     """Build a MET-style forecast body with a sinusoidal TOTAL column."""
     lines = [
-        "MET forecast. Water level for TESTHAVN",
+        "MET - PROGNOSER",
         "",
-        " AAR MND DAG TIM MIN    SURGE    TIDE   TOTAL   0p  25p  50p  75p 100p",
+        "VANNSTANDSVARSEL --- MET STORMFLO ---",
+        "",
+        f"SIST OPPDATERT: {start:%Y%m%d %H:%M} UTC",
+        "==========================================",
+        "TESTHAVN",
+        "------------------------------",
+        " AAR MND DAG TIM MIN  SURGE  TIDE   TOTAL  0p     25p    50p    75p    100p",
     ]
     for i in range(hours * 60 // step_minutes + 1):
         t = start + timedelta(minutes=i * step_minutes)

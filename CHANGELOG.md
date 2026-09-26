@@ -8,7 +8,8 @@
 - `current_height` now actually updates every 5 minutes between hourly fetches
 - Setup is retried by Home Assistant when MET is unreachable at startup
 - The same harbor can no longer be added twice
-- The config flow aborts with a clear message when the harbor list can't be fetched, instead of offering an empty harbor
+- The config flow no longer offers an empty harbor when the harbor list can't be fetched; it falls back to the harbors listed in the API documentation
+- Use the documented API endpoints (`/1.1/?harbor=` and `/1.1/available`) instead of `/forecast` and `/available.xml`
 
 ### Changed
 - Identify with a proper User-Agent, as required by MET Norway's terms of service

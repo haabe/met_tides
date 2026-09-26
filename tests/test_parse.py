@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from conftest import FIXTURES
 
 from custom_components.met_tides.sensor import (
     find_next_tides,
@@ -21,6 +22,20 @@ def _assert_near(actual: datetime, expected: datetime, tol=timedelta(minutes=10)
 
 
 class TestParseTides:
+    def test_documented_example_output(self):
+        """Example response from the API documentation (Bergen)."""
+        text = (FIXTURES / "bergen.txt").read_text()
+        result = parse_tides(text, now=datetime(2024, 10, 24, 12, 5, tzinfo=UTC))
+        points = result["tide_points"]
+        assert len(points) == 16
+        assert points[0] == {"datetime": datetime(2024, 10, 24, 12, 0, tzinfo=UTC), "height": 0.26}
+        assert points[-1] == {"datetime": datetime(2024, 10, 24, 14, 30, tzinfo=UTC), "height": 0.54}
+        # TOTAL, not SURGE/TIDE/percentiles, and midway between 0.26 and 0.28
+        assert result["current_height"] == pytest.approx(0.27)
+        # A rising-tide excerpt contains no turning points
+        assert result["next_high"]["datetime"] is None
+        assert result["next_low"]["datetime"] is None
+
     def test_skips_header_and_malformed_lines(self, forecast_start):
         text = "\n".join(
             [

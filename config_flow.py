@@ -9,10 +9,11 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    API_BASE,
+    AVAILABLE_URL,
     CONF_HARBOR,
     CONF_SENSORS,
     DEFAULT_NAME,
+    DOCUMENTED_HARBORS,
     DOMAIN,
     REQUEST_TIMEOUT,
     SENSOR_TYPES,
@@ -23,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def parse_harbors(text: str) -> dict:
-    """Parse the MET available.xml document into {harbor_id: label}."""
+    """Parse the MET available document into {harbor_id: label}."""
     root = ET.fromstring(text)
     harbors = {}
     for query in root.findall("query"):
@@ -36,11 +37,12 @@ def parse_harbors(text: str) -> dict:
 
 async def fetch_harbors(hass) -> dict:
     """Fetch available harbors from MET API. Returns {} on any failure."""
-    url = f"{API_BASE}/available.xml"
     headers = {"User-Agent": USER_AGENT}
     try:
         session = async_get_clientsession(hass)
-        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)) as resp:
+        async with session.get(
+            AVAILABLE_URL, headers=headers, timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+        ) as resp:
             resp.raise_for_status()
             text = await resp.text()
         harbors = parse_harbors(text)
@@ -66,7 +68,8 @@ class METTidesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         harbors = await fetch_harbors(self.hass)
         if not harbors:
-            return self.async_abort(reason="cannot_connect")
+            _LOGGER.warning("Harbor list unavailable, falling back to documented harbors")
+            harbors = {h: h.capitalize() for h in DOCUMENTED_HARBORS}
 
         schema = vol.Schema(
             {

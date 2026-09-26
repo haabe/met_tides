@@ -7,9 +7,9 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.met_tides.config_flow import parse_harbors
-from custom_components.met_tides.const import DOMAIN
+from custom_components.met_tides.const import DOCUMENTED_HARBORS, DOMAIN
 
-AVAILABLE_URL = "https://api.met.no/weatherapi/tidalwater/1.1/available.xml"
+AVAILABLE_URL = "https://api.met.no/weatherapi/tidalwater/1.1/available"
 
 
 @pytest.fixture(autouse=True)
@@ -64,24 +64,41 @@ async def test_duplicate_harbor_aborts(hass, aioclient_mock, harbors_xml):
     assert result["reason"] == "already_configured"
 
 
+def _harbor_options(result) -> dict:
+    return result["data_schema"].schema["harbor"].container
+
+
 @pytest.mark.parametrize(
     "mock_kwargs",
     [
         {"status": 500},
+        {"status": 503, "text": "<available/>"},
         {"exc": aiohttp.ClientError()},
         {"exc": TimeoutError()},
         {"text": "<not xml"},
         {"text": "<available/>"},
     ],
 )
-async def test_harbor_fetch_failure_aborts(hass, aioclient_mock, mock_kwargs):
+async def test_harbor_fetch_failure_falls_back_to_documented_list(hass, aioclient_mock, mock_kwargs):
     aioclient_mock.get(AVAILABLE_URL, **mock_kwargs)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "cannot_connect"
+    assert result["type"] is FlowResultType.FORM
+    options = _harbor_options(result)
+    assert set(options) == set(DOCUMENTED_HARBORS)
+    assert options["tromsø"] == "Tromsø"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "x", "harbor": "tromsø"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == "tromsø"
 
 
-async def test_harbor_fetch_error_status_with_valid_body_aborts(hass, aioclient_mock, harbors_xml):
+async def test_harbor_fetch_error_status_ignores_body(hass, aioclient_mock, harbors_xml):
+    """A 5xx must not be parsed even if its body looks valid."""
     aioclient_mock.get(AVAILABLE_URL, status=503, text=harbors_xml)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert result["type"] is FlowResultType.ABORT
+    assert set(_harbor_options(result)) == set(DOCUMENTED_HARBORS)
+
+
+def test_documented_harbors_are_normalised():
+    assert len(DOCUMENTED_HARBORS) == len(set(DOCUMENTED_HARBORS))
+    assert all(h == h.lower().strip() for h in DOCUMENTED_HARBORS)
